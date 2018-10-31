@@ -22,13 +22,13 @@ def preprocess(datasize):
 	# natoms = number of atoms in a given molecule
 	# nonHatoms = number of non-H atoms in a given molecule 21989
 	# Ea = Atomization energy (Ha)
-	# mu = Dipole moment (Debye
-	# alpha = Isotropic polarizability (bohr^3)
+	# dipmom = Dipole moment (Debye
+	# polarizability = Isotropic polarizability (bohr^3)
 	# atomlist = list of the atoms constituting a given molecule (e.g. ['C','H','H','H'] for methane)
 	# coords = xyz coordinates of each atom in a given molecule
 	# charges = Partial charges from Mulliken population analysis (e)
 
-	natoms,nonHatoms,Ea,charges,alpha,mu,gap,atomlist,coords=[],[],[],[],[],[],[],[],[]
+	natoms,nonHatoms,Ea,charges,polarizability,dipmom,gap,atomlist,coords=[],[],[],[],[],[],[],[],[]
 
 	atomref=[-0.500273,-37.846772,-54.583861,-75.064579,-99.718730]     # Energies (Ha) of single atoms [H,C,N,O,F]
 	atoms=['H','C','N','O','F']
@@ -53,8 +53,8 @@ def preprocess(datasize):
 					natoms.append(na)
 				elif j == 1:
 					E = float(line.split()[12])                     # Properties written on second line. Atomization energy,
-					mu.append(float(line.split()[5]))               # Dipole moment,
-					alpha.append(float(line.split()[6])*0.14818)    # Polarizability
+					dipmom.append(float(line.split()[5]))               # Dipole moment,
+					polarizability.append(float(line.split()[6])*0.14818)    # Polarizability
 					gap.append(float(line.split()[9])*27.21139)     # HOMO-LUMO gap
 				elif 2 <= j <= na+1:
 					parts = line.split()                    # Lines 2 -> na+1 contains element types, coordinates and charges
@@ -73,7 +73,7 @@ def preprocess(datasize):
 
 	# Return all lists in the form of numpy arrays
 
-	return np.array(natoms),np.array(Ea),np.array(mu),np.array(charges),np.array(alpha),np.array(gap), \
+	return np.array(natoms),np.array(Ea),np.array(dipmom),np.array(charges),np.array(polarizability),np.array(gap), \
 		np.array(atomlist),np.array(coords),np.array(nonHatoms)
 
 
@@ -81,7 +81,7 @@ def preprocess(datasize):
 
 def mbtr(mbtr_input):
 
-
+	
 
 	return mbtr_output
 
@@ -110,7 +110,7 @@ def bob(atomlist,coords):
 						del bag[atomlist[i][k]+atomlist[i][j]][-1]		# Avoid KeyError raised by "wrong" order of atoms in a bond (e.g. 'CH' -> 'HC')
 		
 		for pair in bag:
-			Bvec = np.concatenate((Bvec,np.array(bag[pair])))
+			Bvec = np.concatenate((Bvec,np.array(sorted(bag[pair],reverse=True))))
 
 		bob_output.append(Bvec)
 
@@ -226,7 +226,7 @@ def main():
 
 	# Preprocess data
 	datasize=10000
-	natoms,Ea,mu,charges,alpha,gap,atomlist,coords,nonHatoms = preprocess(datasize)
+	natoms,Ea,dipmom,charges,polarizability,gap,atomlist,coords,nonHatoms = preprocess(datasize)
 
 	inp1 = raw_input('Which descriptor? [CM/BoB/MBTR]\n')
 
@@ -243,7 +243,7 @@ def main():
 		#descriptor = mbtr(mbtr_input)
 		print('Not yet implemented.')
 
-	inp2 = raw_input('Which property? [Ea/gap/alpha/mu]\n')
+	inp2 = raw_input('Which property? [Ea/gap/polarizability/dipmom]\n')
 
 	plt.figure()
 
@@ -261,16 +261,16 @@ def main():
 		plt.xlabel(r'$\Delta\varepsilon^\mathrm{DFT}$ (eV)')
 		plt.ylabel(r'$\Delta\varepsilon^\mathrm{KRR}$ (eV)')
 
-	elif inp2 == 'alpha':
+	elif inp2 == 'polarizability':
 
-		prop = alpha
+		prop = polarizability
 		plt.title(r'Isotropic polarizability (\r{A}$^3$)')
 		plt.xlabel(r'$\alpha^\mathrm{DFT}$ (\r{A}$^3$)')
 		plt.ylabel(r'$\alpha^\mathrm{KRR}$ (\r{A}$^3$)')
 
-	elif inp2 == 'mu':
+	elif inp2 == 'dipmom':
 
-		prop = mu
+		prop = dipmom
 		plt.title(r'Dipole moment (D)')
 		plt.xlabel(r'$\mu^\mathrm{DFT}$ (D)')
 		plt.ylabel(r'$\mu^\mathrm{KRR}$ (D)')
