@@ -6,6 +6,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error as MAE
 from sklearn.metrics import mean_squared_error as MSE
+from sklearn.metrics import r2_score as R2
 from scipy.special import comb
 
 
@@ -22,13 +23,13 @@ def preprocess(datasize):
 	# natoms = number of atoms in a given molecule
 	# nonHatoms = number of non-H atoms in a given molecule 21989
 	# Ea = Atomization energy (Ha)
-	# dipmom = Dipole moment (Debye
-	# polarizability = Isotropic polarizability (bohr^3)
+	# dipmom = Dipole moment (D)
+	# polar = Isotropic polarizability (bohr^3)
 	# atomlist = list of the atoms constituting a given molecule (e.g. ['C','H','H','H'] for methane)
 	# coords = xyz coordinates of each atom in a given molecule
 	# charges = Partial charges from Mulliken population analysis (e)
 
-	natoms,nonHatoms,Ea,charges,polarizability,dipmom,gap,atomlist,coords=[],[],[],[],[],[],[],[],[]
+	natoms,nonHatoms,Ea,charges,polar,dipmom,gap,atomlist,coords=[],[],[],[],[],[],[],[],[]
 
 	atomref=[-0.500273,-37.846772,-54.583861,-75.064579,-99.718730]     # Energies (Ha) of single atoms [H,C,N,O,F]
 	atoms=['H','C','N','O','F']
@@ -53,8 +54,8 @@ def preprocess(datasize):
 					natoms.append(na)
 				elif j == 1:
 					E = float(line.split()[12])                     # Properties written on second line. Atomization energy,
-					dipmom.append(float(line.split()[5]))               # Dipole moment,
-					polarizability.append(float(line.split()[6])*0.14818)    # Polarizability
+					dipmom.append(float(line.split()[5])*0.20819)   # Dipole moment,
+					polar.append(float(line.split()[6])*0.14818)    # Polarizability
 					gap.append(float(line.split()[9])*27.21139)     # HOMO-LUMO gap
 				elif 2 <= j <= na+1:
 					parts = line.split()                    # Lines 2 -> na+1 contains element types, coordinates and charges
@@ -73,7 +74,7 @@ def preprocess(datasize):
 
 	# Return all lists in the form of numpy arrays
 
-	return np.array(natoms),np.array(Ea),np.array(dipmom),np.array(charges),np.array(polarizability),np.array(gap), \
+	return np.array(natoms),np.array(Ea),np.array(dipmom),np.array(charges),np.array(polar),np.array(gap), \
 		np.array(atomlist),np.array(coords),np.array(nonHatoms)
 
 
@@ -187,10 +188,11 @@ def krr(x,y,nonHatoms):
 	y_pred = kr.predict(x_test)
 	mae = MAE(y_test,y_pred)
 	rmse = np.sqrt(MSE(y_test,y_pred))
+	r2 = R2(y_test,y_pred)
 
 	# Print mean absolute error and root mean squared error
 
-	print('Mean absolute error: ',MAE(y_test,y_pred),'Root mean squared error: ',np.sqrt(MSE(y_test,y_pred)))
+	print('Mean absolute error: ' + repr(mae) + ', Root mean squared error: ' + repr(rmse) + ', R2-score: ' + repr(r2))
 
 	return y_pred,y_test
 
@@ -226,7 +228,7 @@ def main():
 
 	# Preprocess data
 	datasize=10000
-	natoms,Ea,dipmom,charges,polarizability,gap,atomlist,coords,nonHatoms = preprocess(datasize)
+	natoms,Ea,dipmom,charges,polar,gap,atomlist,coords,nonHatoms = preprocess(datasize)
 
 	inp1 = raw_input('Which descriptor? [CM/BoB/MBTR]\n')
 
@@ -243,7 +245,7 @@ def main():
 		#descriptor = mbtr(mbtr_input)
 		print('Not yet implemented.')
 
-	inp2 = raw_input('Which property? [Ea/gap/polarizability/dipmom]\n')
+	inp2 = raw_input('Which property? [Ea/gap/polar/dipmom]\n')
 
 	plt.figure()
 
@@ -261,9 +263,9 @@ def main():
 		plt.xlabel(r'$\Delta\varepsilon^\mathrm{DFT}$ (eV)')
 		plt.ylabel(r'$\Delta\varepsilon^\mathrm{KRR}$ (eV)')
 
-	elif inp2 == 'polarizability':
+	elif inp2 == 'polar':
 
-		prop = polarizability
+		prop = polar
 		plt.title(r'Isotropic polarizability (\r{A}$^3$)')
 		plt.xlabel(r'$\alpha^\mathrm{DFT}$ (\r{A}$^3$)')
 		plt.ylabel(r'$\alpha^\mathrm{KRR}$ (\r{A}$^3$)')
@@ -271,9 +273,9 @@ def main():
 	elif inp2 == 'dipmom':
 
 		prop = dipmom
-		plt.title(r'Dipole moment (D)')
-		plt.xlabel(r'$\mu^\mathrm{DFT}$ (D)')
-		plt.ylabel(r'$\mu^\mathrm{KRR}$ (D)')
+		plt.title(r'Dipole moment (e\r{A})')
+		plt.xlabel(r'$\mu^\mathrm{DFT}$ (e\r{A})')
+		plt.ylabel(r'$\mu^\mathrm{KRR}$ (e\r{A})')
 
 	inp3 = input('Plot learning curve? [True/False]\n')
 
