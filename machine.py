@@ -21,7 +21,7 @@ def preprocess(datasize):
 
 	# Initialize the variables as empty lists
 	# natoms = number of atoms in a given molecule
-	# nonHatoms = number of non-H atoms in a given molecule 21989
+	# nonHatoms = number of non-H atoms in a given molecule
 	# Ea = Atomization energy (Ha)
 	# dipmom = Dipole moment (D)
 	# polar = Isotropic polarizability (bohr^3)
@@ -221,10 +221,10 @@ def learning_curve(x,y,nonHatoms):
 def main():
 
 	# Just some plot settings
-	plt.ion()
 	plt.rc('text', usetex=True)
 	plt.rc('font', family='serif', size=14)
 	plt.rc('xtick', direction='in')
+	plt.rc('ytick', direction='in')
 
 	# Preprocess data
 	datasize=10000
