@@ -8,7 +8,8 @@ from sklearn.metrics import mean_absolute_error as MAE
 from sklearn.metrics import mean_squared_error as MSE
 from sklearn.metrics import r2_score as R2
 from scipy.special import comb
-
+from scipy.stats import gaussian_kde as gauss
+import time
 
 ## This part of the code reads the raw data (.xyz files) and returns the central quantities stored in arrays
 
@@ -21,7 +22,7 @@ def preprocess(datasize):
 
 	# Initialize the variables as empty lists
 	# natoms = number of atoms in a given molecule
-	# nonHatoms = number of non-H atoms in a given molecule
+	# nonHatoms = number of non-H atoms in a given molecule 21989
 	# Ea = Atomization energy (Ha)
 	# dipmom = Dipole moment (D)
 	# polar = Isotropic polarizability (bohr^3)
@@ -77,15 +78,46 @@ def preprocess(datasize):
 	return np.array(natoms),np.array(Ea),np.array(dipmom),np.array(charges),np.array(polar),np.array(gap), \
 		np.array(atomlist),np.array(coords),np.array(nonHatoms)
 
+def gauss(x,weight,sigma,mu):
 
-## Implement the MBTR descriptor here! Azeema?
+	return weight/(sigma*np.sqrt(2*np.pi))*np.exp(-((x-mu)**2)/(2*sigma**2))
 
-def mbtr(mbtr_input):
+def mbtr(atomlist,coords):
 
-	
+	d=0.5
+	w1=1
+	sigma1,sigma2,sigma3=0.1,0.01,0.05
+	atoms = ['H','C','O','N','F']
+	Z = [1,6,8,7,9]
+	x1=np.linspace(0,10,1001)
+	x2=np.linspace(0,1.25,1001)
+	x3=np.linspace(-1,1,1001)
+	mbtr_output=[]
+
+	for i in range(len(atomlist)):
+		D1=np.zeros(len(x1))
+		D2=np.zeros(len(x2))
+		D3=np.zeros(len(x3))
+		for j in range(len(atomlist[i])):
+			g1=Z[atoms.index(atomlist[i][j])]
+			D1+=gauss(x1,w1,sigma1,g1)
+			for k in range(len(atomlist[i])):
+				if k > j:
+					Rjk=np.linalg.norm(coords[i][j]-coords[i][k])
+					w2=np.exp(-d*Rjk)
+					g2=1/Rjk
+					D2+=gauss(x2,w2,sigma2,g2)
+					for l in range(len(atomlist[i])):
+						if l > k:
+							Rjl=np.linalg.norm(coords[i][j]-coords[i][l])
+							Rkl=np.linalg.norm(coords[i][k]-coords[i][l])
+							w3=np.exp(-d*(Rjk+Rjl+Rkl))
+							g3=np.dot(coords[i][j]-coords[i][l],coords[i][k]-coords[i][l])/(Rjl*Rkl)
+							D3+=gauss(x3,w3,sigma3,g3)
+
+		mbtr_output.append(np.concatenate((D1,D2,D3),axis=None))
 
 	return mbtr_output
-
 
 ## The BoB descriptor
 
@@ -162,11 +194,11 @@ def krr(x,y,nonHatoms):
 	# HOMO-LUMO gap: 	alpha 1e-3, gamma 1e-4
 	# Dipole moment: 	alpha 1e-1, gamma 1e-3
 
-	## Optimal hyperparameters for MBTR + Gaussian kernel
-	# Ea:
-	# polarizability:
-	# HOMO-LUMO gap:
-	# Dipole moment:
+	## Optimal hyperparameters for MBTR + Laplacian kernel
+	# Ea:				alpha 1e-11, gamma 1e-7
+	# polarizability:	alpha 1e-??, gamma 1e-??
+	# HOMO-LUMO gap:	alpha 1e-??, gamma 1e-??
+	# Dipole moment:	alpha 1e-??, gamma 1e-??
 
 	inp4 = input('Do grid search for optimal hyperparameters? [True/False]\n')
 
@@ -224,7 +256,6 @@ def main():
 	plt.rc('text', usetex=True)
 	plt.rc('font', family='serif', size=14)
 	plt.rc('xtick', direction='in')
-	plt.rc('ytick', direction='in')
 
 	# Preprocess data
 	datasize=10000
@@ -242,8 +273,7 @@ def main():
 
 	elif inp1 == 'MBTR':
 
-		#descriptor = mbtr(mbtr_input)
-		print('Not yet implemented.')
+		descriptor = mbtr(atomlist,coords)
 
 	inp2 = raw_input('Which property? [Ea/gap/polar/dipmom]\n')
 
