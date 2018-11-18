@@ -2,18 +2,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from sklearn.kernel_ridge import KernelRidge
-from sklearn.model_selection import GridSearchCV
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.metrics import mean_absolute_error as MAE
 from sklearn.metrics import mean_squared_error as MSE
 from sklearn.metrics import r2_score as R2
 from scipy.special import comb
-from scipy.stats import gaussian_kde as gauss
-import time
+from itertools import combinations, permutations
 
 ## This part of the code reads the raw data (.xyz files) and returns the central quantities stored in arrays
 
-def preprocess(datasize):
+def preprocess(datasize,atoms):
 
 	# Selects all molecules with 7 or fewer non-H atoms (3963) and (datasize - 3963) molecules with 8 non-H atoms at random.
 	# This compensates the underrepresentation of small molecules (molecules with 9 non-H atoms are excluded)
@@ -28,12 +26,10 @@ def preprocess(datasize):
 	# polar = Isotropic polarizability (bohr^3)
 	# atomlist = list of the atoms constituting a given molecule (e.g. ['C','H','H','H'] for methane)
 	# coords = xyz coordinates of each atom in a given molecule
-	# charges = Partial charges from Mulliken population analysis (e)
 
-	natoms,nonHatoms,Ea,charges,polar,dipmom,gap,atomlist,coords=[],[],[],[],[],[],[],[],[]
+	natoms,nonHatoms,Ea,polar,dipmom,gap,atomlist,coords=[],[],[],[],[],[],[],[]
 
 	atomref=[-0.500273,-37.846772,-54.583861,-75.064579,-99.718730]     # Energies (Ha) of single atoms [H,C,N,O,F]
-	atoms=['H','C','N','O','F']
 
 	# Loop over all selected indices (molecules)
 
@@ -61,7 +57,6 @@ def preprocess(datasize):
 				elif 2 <= j <= na+1:
 					parts = line.split()                    # Lines 2 -> na+1 contains element types, coordinates and charges
 					elemtype.append(parts[0])               # Index 0 = element type, 1 = x, 2 = y, 3 = z
-					mulliken.append(parts[4])               # Partial charge on atom
 					E = E - atomref[atoms.index(parts[0])]  # Subtract energy of isolated atom from total energy
 					if parts[0] != 'H':
 						nnonH += 1
@@ -71,67 +66,82 @@ def preprocess(datasize):
 		atomlist.append(elemtype)
 		coords.append(xyz)
 		nonHatoms.append(nnonH)
-		charges.append(mulliken)
 
 	# Return all lists in the form of numpy arrays
 
-	return np.array(natoms),np.array(Ea),np.array(dipmom),np.array(charges),np.array(polar),np.array(gap), \
+	return np.array(natoms),np.array(Ea),np.array(dipmom),np.array(polar),np.array(gap), \
 		np.array(atomlist),np.array(coords),np.array(nonHatoms)
 
 def gauss(x,weight,sigma,mu):
 
 	return weight/(sigma*np.sqrt(2*np.pi))*np.exp(-((x-mu)**2)/(2*sigma**2))
 
-def mbtr(atomlist,coords):
+def mbtr(atomlist,coords,atoms,Z):
 
-	d=0.5
+	# Decay factor (d) and sigmas are roughly optimal
+
+	d=0.2
 	w1=1
 	sigma1,sigma2,sigma3=0.1,0.01,0.05
-	atoms = ['H','C','O','N','F']
-	Z = [1,6,8,7,9]
-	x1=np.linspace(0,10,1001)
-	x2=np.linspace(0,1.25,1001)
-	x3=np.linspace(-1,1,1001)
+	x1=np.linspace(0,10,101)
+	x2=np.linspace(0,1.25,101)
+	x3=np.linspace(-1,1,101)
 	mbtr_output=[]
+	
+	atoms = list(set([''.join(p) for p in combinations('CHONF',1)]))
+	pairs = list(set([''.join(p) for p in combinations('CCHHOONNFF',2)]))
+	triples = list(set([''.join(p) for p in permutations('CCCHHHOOONNNFFF',3)]))
 
 	for i in range(len(atomlist)):
-		D1=np.zeros(len(x1))
-		D2=np.zeros(len(x2))
-		D3=np.zeros(len(x3))
+		bag1=dict((k,np.zeros(len(x1))) for k in atoms)
+		bag2=dict((k,np.zeros(len(x2))) for k in pairs) 
+		bag3=dict((k,np.zeros(len(x3))) for k in triples)
+		MBTRvec=np.array([]) 	
 		for j in range(len(atomlist[i])):
 			g1=Z[atoms.index(atomlist[i][j])]
-			D1+=gauss(x1,w1,sigma1,g1)
+			bag1[atomlist[i][j]]+=gauss(x1,w1,sigma1,g1)
 			for k in range(len(atomlist[i])):
 				if k > j:
 					Rjk=np.linalg.norm(coords[i][j]-coords[i][k])
 					w2=np.exp(-d*Rjk)
 					g2=1/Rjk
-					D2+=gauss(x2,w2,sigma2,g2)
+					try:
+						bag2[atomlist[i][j]+atomlist[i][k]]+=gauss(x2,w2,sigma2,g2)	
+					except KeyError:
+						bag2[atomlist[i][k]+atomlist[i][j]]+=gauss(x2,w2,sigma2,g2)
 					for l in range(len(atomlist[i])):
 						if l > k:
 							Rjl=np.linalg.norm(coords[i][j]-coords[i][l])
 							Rkl=np.linalg.norm(coords[i][k]-coords[i][l])
 							w3=np.exp(-d*(Rjk+Rjl+Rkl))
 							g3=np.dot(coords[i][j]-coords[i][l],coords[i][k]-coords[i][l])/(Rjl*Rkl)
-							D3+=gauss(x3,w3,sigma3,g3)
+							try:
+								bag3[atomlist[i][j]+atomlist[i][l]+atomlist[i][k]]+=gauss(x3,w3,sigma3,g3)	
+							except KeyError:
+								bag3[atomlist[i][k]+atomlist[i][l]+atomlist[i][j]]+=gauss(x3,w3,sigma3,g3)
 
-		mbtr_output.append(np.concatenate((D1,D2,D3),axis=None))
+		for atom in bag1:
+			MBTRvec = np.concatenate((MBTRvec,bag1[atom]))
+		for pair in bag2:
+			MBTRvec = np.concatenate((MBTRvec,bag2[pair]))
+		for triple in bag3:
+			MBTRvec = np.concatenate((MBTRvec,bag3[triple]))
+
+		mbtr_output.append(MBTRvec)
 
 	return mbtr_output
 
 ## The BoB descriptor
 
-def bob(atomlist,coords):
+def bob(atomlist,coords,atoms,Z):
 
-	atoms = ['H','C','O','N','F']
-	Z = [1,6,8,7,9]     
 	bob_output = []
 	dim = int(comb(18,2))			# 18 H atoms in octane -> comb(18,2) H-H pairs (max. size of a bond vector in a bag of bonds)
+	perms = list(set([''.join(p) for p in combinations('CCHHOONNFF',2)]))
 
 	for i in range(len(atomlist)):
-		bag = {'HH': dim*[0],'HC': dim*[0],'HO': dim*[0],'HN': dim*[0],'HF': dim*[0],'CC': dim*[0],'CO': dim*[0],
-		'CN': dim*[0],'CF': dim*[0],'OO': dim*[0],'ON': dim*[0],'OF': dim*[0],'NN': dim*[0],'NF': dim*[0],'FF': dim*[0]}	# General form of a bag of bonds
-		Bvec = np.array([])
+		bag=dict((k,dim*[0]) for k in perms)
+		BoBvec = np.array([])
 		for j in range(len(atomlist[i])):
 			for k in range(len(atomlist[i])):
 				if j > k:
@@ -143,39 +153,37 @@ def bob(atomlist,coords):
 						del bag[atomlist[i][k]+atomlist[i][j]][-1]		# Avoid KeyError raised by "wrong" order of atoms in a bond (e.g. 'CH' -> 'HC')
 		
 		for pair in bag:
-			Bvec = np.concatenate((Bvec,np.array(sorted(bag[pair],reverse=True))))
+			BoBvec = np.concatenate((BoBvec,np.array(sorted(bag[pair],reverse=True))))
 
-		bob_output.append(Bvec)
+		bob_output.append(BoBvec)
 
 	return bob_output
 
 ## The following function takes the number of atoms in each molecule, the atom types and corresponding coordinates 
 ## and returns an array of corresponding Coulomb matrices
 
-def coulomb(natoms,atomlist,coords):
+def coulomb(natoms,atomlist,coords,atoms,Z):
 
 	dim = natoms.max()                      # Specify the dimensions of the Coulomb matrices based on the largest molecule
-	atoms = ['C','H','O','N','F']           # List of all possible atom types
-	Z = [6,1,8,7,9]                         # The corresponding nuclear charges
-	M = np.zeros((len(natoms),dim,dim))     # Initialize an array of all Coulomb matrices
-	Mvec = []
+	CM = np.zeros((len(natoms),dim,dim))     # Initialize an array of all Coulomb matrices
+	CMvec = []
 
 	for i in range(len(natoms)):                # Loop over all molecules
 		for j in range(len(atomlist[i])):       # Loop over all atom pairs (j,k) in molecule i
 			for k in range(len(atomlist[i])):
 				if j == k:
-					M[i][j][k] = 0.5*Z[atoms.index(atomlist[i][j])]**2.4
+					CM[i][j][k] = 0.5*Z[atoms.index(atomlist[i][j])]**2.4
 				else:
-					M[i][j][k] = Z[atoms.index(atomlist[i][j])]*Z[atoms.index(atomlist[i][k])]/np.linalg.norm(coords[i][j]-coords[i][k])
+					CM[i][j][k] = Z[atoms.index(atomlist[i][j])]*Z[atoms.index(atomlist[i][k])]/np.linalg.norm(coords[i][j]-coords[i][k])
 		
 		# Sort Coulomb matrix according to descending row norm
 
-		indexlist = np.argsort(-np.linalg.norm(M[i],axis=1))    # Get the indices in the sorted order
-		M[i] = M[i][indexlist]                                  # Rearrange the matrix
-		Mvec.append(M[i][np.tril_indices(dim,k=0)])             # Convert the lower triangular matrix into a vector and append 
+		indexlist = np.argsort(-np.linalg.norm(CM[i],axis=1))    # Get the indices in the sorted order
+		CM[i] = CM[i][indexlist]                                  # Rearrange the matrix
+		CMvec.append(CM[i][np.tril_indices(dim,k=0)])             # Convert the lower triangular matrix into a vector and append 
 																# to a list of Coulomb 'vectors' 
 
-	return Mvec
+	return CMvec
 
 ## Do the grid search (if optimal hyperparameters are not known), then training and prediction using KRR
 ## If doing grid search for optimal parameters use small training set size, like 1k (takes forever otherwise)
@@ -194,18 +202,20 @@ def krr(x,y,nonHatoms):
 	# HOMO-LUMO gap: 	alpha 1e-3, gamma 1e-4
 	# Dipole moment: 	alpha 1e-1, gamma 1e-3
 
-	## Optimal hyperparameters for MBTR + Laplacian kernel
-	# Ea:				alpha 1e-11, gamma 1e-7
-	# polarizability:	alpha 1e-??, gamma 1e-??
-	# HOMO-LUMO gap:	alpha 1e-??, gamma 1e-??
-	# Dipole moment:	alpha 1e-??, gamma 1e-??
+	## Optimal hyperparameters for MBTR + Gaussian kernel
+	# Ea:				alpha 1e-8, gamma 1e-9
+	# polarizability:	alpha 1e-6, gamma 1e-8
+	# HOMO-LUMO gap:	alpha 1e-3, gamma 1e-7
+	# Dipole moment:	alpha 1e-2, gamma 1e-6
 
 	inp4 = input('Do grid search for optimal hyperparameters? [True/False]\n')
 
 	if inp4 == True:
 
+		inp5 = raw_input('Provide kernel. [laplacian/rbf]\n').split()
+
 		x_train, x_test, y_train, y_test = train_test_split(x,y,test_size=0.9,stratify=nonHatoms)
-		kr = GridSearchCV(KernelRidge(kernel='laplacian'),cv=5,param_grid={"alpha": np.logspace(-11,0,12),"gamma": np.logspace(-11,0,12)})
+		kr = GridSearchCV(KernelRidge(kernel=inp5[0]),cv=5,param_grid={"alpha": np.logspace(-11,-1,11),"gamma": np.logspace(-11,-3,9)})
 		kr.fit(x_train,y_train)
 		print(kr.best_params_)
 
@@ -259,21 +269,23 @@ def main():
 
 	# Preprocess data
 	datasize=10000
-	natoms,Ea,dipmom,charges,polar,gap,atomlist,coords,nonHatoms = preprocess(datasize)
+	atoms = ['H','C','N','O','F']
+	Z = [1,6,7,8,9]
+	natoms,Ea,dipmom,polar,gap,atomlist,coords,nonHatoms = preprocess(datasize,atoms)
 
 	inp1 = raw_input('Which descriptor? [CM/BoB/MBTR]\n')
 
 	if inp1 == 'CM':
 
-		descriptor = coulomb(natoms,atomlist,coords)
+		descriptor = coulomb(natoms,atomlist,coords,atoms,Z)
 	
 	elif inp1 == 'BoB':
 
-		descriptor = bob(atomlist,coords)
+		descriptor = bob(atomlist,coords,atoms,Z)
 
 	elif inp1 == 'MBTR':
 
-		descriptor = mbtr(atomlist,coords)
+		descriptor = mbtr(atomlist,coords,atoms,Z)
 
 	inp2 = raw_input('Which property? [Ea/gap/polar/dipmom]\n')
 
