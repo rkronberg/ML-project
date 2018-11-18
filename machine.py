@@ -83,9 +83,9 @@ def mbtr(atomlist,coords,atoms,Z):
 	d=0.2
 	w1=1
 	sigma1,sigma2,sigma3=0.1,0.01,0.05
-	x1=np.linspace(0,10,101)
-	x2=np.linspace(0,1.25,101)
-	x3=np.linspace(-1,1,101)
+	x1=np.linspace(0,10,201)
+	x2=np.linspace(0,1.25,201)
+	x3=np.linspace(-1,1,201)
 	mbtr_output=[]
 	
 	atoms = list(set([''.join(p) for p in combinations('CHONF',1)]))
@@ -203,8 +203,8 @@ def krr(x,y,nonHatoms):
 	# Dipole moment: 	alpha 1e-1, gamma 1e-3
 
 	## Optimal hyperparameters for MBTR + Gaussian kernel
-	# Ea:				alpha 1e-8, gamma 1e-9
-	# polarizability:	alpha 1e-6, gamma 1e-8
+	# Ea:				alpha 1e-7, gamma 1e-8
+	# polarizability:	alpha 1e-6, gamma 1e-9
 	# HOMO-LUMO gap:	alpha 1e-3, gamma 1e-7
 	# Dipole moment:	alpha 1e-2, gamma 1e-6
 
@@ -215,7 +215,7 @@ def krr(x,y,nonHatoms):
 		inp5 = raw_input('Provide kernel. [laplacian/rbf]\n').split()
 
 		x_train, x_test, y_train, y_test = train_test_split(x,y,test_size=0.9,stratify=nonHatoms)
-		kr = GridSearchCV(KernelRidge(kernel=inp5[0]),cv=5,param_grid={"alpha": np.logspace(-11,-1,11),"gamma": np.logspace(-11,-3,9)})
+		kr = GridSearchCV(KernelRidge(kernel=inp5[0]),cv=5,param_grid={"alpha": np.logspace(-11,-1,11),"gamma": np.logspace(-9,-3,7)})
 		kr.fit(x_train,y_train)
 		print(kr.best_params_)
 
