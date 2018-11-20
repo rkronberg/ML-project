@@ -80,7 +80,7 @@ def mbtr(atomlist,coords,atoms,Z):
 
 	# Decay factor (d) and sigmas are roughly optimal
 
-	d=0.2
+	d=0.5
 	w1=1
 	sigma1,sigma2,sigma3=0.1,0.01,0.05
 	x1=np.linspace(0,10,201)
@@ -189,24 +189,6 @@ def coulomb(natoms,atomlist,coords,atoms,Z):
 ## If doing grid search for optimal parameters use small training set size, like 1k (takes forever otherwise)
 
 def krr(x,y,nonHatoms):
-	
-	## Optimal hyperparameters for CM + Laplacian kernel
-	# Ea: 				alpha 1e-11, gamma 1e-4
-	# polarizability: 	alpha 1e-3, gamma 1e-4
-	# HOMO-LUMO gap: 	alpha 1e-2, gamma 1e-4
-	# Dipole moment: 	alpha 1e-1, gamma 1e-3
-
-	## Optimal hyperparameters for BoB + Laplacian kernel
-	# Ea: 				alpha 1e-11, gamma 1e-5
-	# polarizability: 	alpha 1e-3, gamma 1e-4
-	# HOMO-LUMO gap: 	alpha 1e-3, gamma 1e-4
-	# Dipole moment: 	alpha 1e-1, gamma 1e-3
-
-	## Optimal hyperparameters for MBTR + Gaussian kernel
-	# Ea:				alpha 1e-7, gamma 1e-8
-	# polarizability:	alpha 1e-6, gamma 1e-9
-	# HOMO-LUMO gap:	alpha 1e-3, gamma 1e-7
-	# Dipole moment:	alpha 1e-2, gamma 1e-6
 
 	inp4 = input('Do grid search for optimal hyperparameters? [True/False]\n')
 
@@ -243,7 +225,7 @@ def learning_curve(x,y,nonHatoms):
 	# Do training with different sample sizes and see how the MAE behaves (learning curve)
 	inp5 = raw_input('Provide kernel and hyperparameters. [kernel alpha gamma]\n').split()
 
-	mae,rmse=[],[]
+	mae,rmse,r2=[],[],[]
 	sample_sizes = [50,200,1000,3000,9000]
 	kr = KernelRidge(kernel=inp5[0],alpha=float(inp5[1]),gamma=float(inp5[2]))
 
@@ -255,6 +237,9 @@ def learning_curve(x,y,nonHatoms):
 		y_pred = kr.predict(x_test)
 		mae.append(MAE(y_test,y_pred))
 		rmse.append(np.sqrt(MSE(y_test,y_pred)))
+		r2.append(R2(y_test,y_pred))
+
+		print('Mean absolute error: ' + repr(mae[-1]) + ', Root mean squared error: ' + repr(rmse[-1]) + ', R2-score: ' + repr(r2[-1]))
 
 	return y_pred,y_test,mae,rmse,sample_sizes
 
@@ -326,6 +311,9 @@ def main():
 		# Train
 		y_pred,y_test,mae,rmse,sample_sizes=learning_curve(descriptor,prop,nonHatoms)
 
+		np.savetxt('dipmom_BoB.dat',np.c_[y_test,y_pred])
+		np.savetxt('dipmom_BoB_lc.dat',np.c_[sample_sizes,mae])
+
 		# Plot learning curve
 		plt.semilogx(sample_sizes,mae,'o-',color='blue')
 		plt.xlabel(r'Training set size')
@@ -344,3 +332,40 @@ def main():
 
 if __name__ == '__main__':
 	main()
+
+	## Optimal hyperparameters for CM + Laplacian kernel
+	# Ea: 				alpha 1e-11, gamma 1e-4
+	# polarizability: 	alpha 1e-3, gamma 1e-4
+	# HOMO-LUMO gap: 	alpha 1e-2, gamma 1e-4
+	# Dipole moment: 	alpha 1e-1, gamma 1e-3
+
+	## Optimal hyperparameters for BoB + Laplacian kernel
+	# Ea: 				alpha 1e-11, gamma 1e-5
+	# polarizability: 	alpha 1e-3, gamma 1e-4
+	# HOMO-LUMO gap: 	alpha 1e-3, gamma 1e-4
+	# Dipole moment: 	alpha 1e-1, gamma 1e-3
+
+	## Optimal hyperparameters for MBTR + Gaussian kernel
+	# Ea:				alpha 1e-7, gamma 1e-8
+	# polarizability:	alpha 1e-6, gamma 1e-7
+	# HOMO-LUMO gap:	alpha 1e-3, gamma 1e-6
+	# Dipole moment:	alpha 1e-2, gamma 1e-5
+
+
+	## Results for CM + Laplacian kernel
+	# Ea: 				MAE 0.38,	RMSE 0.55,	R2 0.9977
+	# polarizability: 	MAE 0.12,	RMSE 0.18,	R2 0.9828
+	# HOMO-LUMO gap: 	MAE 0.56,	RMSE 0.70,	R2 0.7203
+	# Dipole moment: 	MAE 0.14,	RMSE 0.19,	R2 0.5901
+
+	## Results for BoB + Laplacian kernel
+	# Ea: 				MAE 0.08,	RMSE 0.13,	R2 0.9998
+	# polarizability: 	MAE 0.06,	RMSE 0.09,	R2 0.9952
+	# HOMO-LUMO gap: 	MAE 0.23,	RMSE 0.31,	R2 0.9465
+	# Dipole moment: 	MAE 0.11,	RMSE 0.16,	R2 0.7327
+
+	## Results for MBTR + Gaussian kernel
+	# Ea: 				MAE 0.04,	RMSE 0.06,	R2 0.9999
+	# polarizability: 	MAE 0.02,	RMSE 0.04,	R2 0.9993
+	# HOMO-LUMO gap: 	MAE 0.17,	RMSE 0.23,	R2 0.9686
+	# Dipole moment: 	MAE 0.08,	RMSE 0.11,	R2 0.8508
