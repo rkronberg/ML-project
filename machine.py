@@ -10,12 +10,10 @@ from scipy.special import comb
 from itertools import combinations, permutations
 
 ## This part of the code reads the raw data (.xyz files) and returns the central quantities stored in arrays
-
 def preprocess(datasize,atoms):
 
 	# Selects all molecules with 7 or fewer non-H atoms (3963) and (datasize - 3963) molecules with 8 non-H atoms at random.
 	# This compensates the underrepresentation of small molecules (molecules with 9 non-H atoms are excluded)
-
 	ind = np.concatenate((np.arange(1,3964),np.random.randint(3964,21989,size=datasize-3963)))
 
 	# Initialize the variables as empty lists
@@ -28,22 +26,20 @@ def preprocess(datasize,atoms):
 	# coords = xyz coordinates of each atom in a given molecule
 
 	natoms,nonHatoms,Ea,polar,dipmom,gap,atomlist,coords=[],[],[],[],[],[],[],[]
-
 	atomref=[-0.500273,-37.846772,-54.583861,-75.064579,-99.718730]     # Energies (Ha) of single atoms [H,C,N,O,F]
 
 	# Loop over all selected indices (molecules)
-
 	for i in ind:
-		xyz,elemtype,mulliken,nnonH=[],[],[],0      # Initialize list that will contain coordinates and element types of ith molecule
-		i = str(i).zfill(6)         # This pads the index with zeros so that all contain 6 digits (e.g. index 41 -> 000041)
+		# Initialize list that will contain coordinates and element types of ith molecule
+		xyz,elemtype,mulliken,nnonH=[],[],[],0
+		# This pads the index with zeros so that all contain 6 digits (e.g. index 41 -> 000041)
+		i = str(i).zfill(6)
 		
 		# Define the path to the .xyz file of ith molecule. Here it is assumed that the dataset is stored in a 
 		# subdirectory "xyz" within the one containing machine.py
-
 		fpath = os.path.join('xyz',"dsgdb9nsd_%s.xyz" % i)      # xyz/*.xyz
 
 		# Open the file and loop over the lines
-
 		with open(fpath) as f:
 			for j, line in enumerate(f):
 				if j == 0:
@@ -68,7 +64,6 @@ def preprocess(datasize,atoms):
 		nonHatoms.append(nnonH)
 
 	# Return all lists in the form of numpy arrays
-
 	return np.array(natoms),np.array(Ea),np.array(dipmom),np.array(polar),np.array(gap), \
 		np.array(atomlist),np.array(coords),np.array(nonHatoms)
 
@@ -79,7 +74,6 @@ def gauss(x,weight,sigma,mu):
 def mbtr(atomlist,coords,atoms,Z):
 
 	# Decay factor (d) and sigmas are roughly optimal
-
 	d=0.5
 	w1=1
 	sigma1,sigma2,sigma3=0.1,0.01,0.05
@@ -132,11 +126,11 @@ def mbtr(atomlist,coords,atoms,Z):
 	return mbtr_output
 
 ## The BoB descriptor
-
 def bob(atomlist,coords,atoms,Z):
 
 	bob_output = []
-	dim = int(comb(18,2))			# 18 H atoms in octane -> comb(18,2) H-H pairs (max. size of a bond vector in a bag of bonds)
+	# 18 H atoms in octane -> comb(18,2) H-H pairs (max. size of a bond vector in a bag of bonds)
+	dim = int(comb(18,2))
 	perms = list(set([''.join(p) for p in combinations('CCHHOONNFF',2)]))
 
 	for i in range(len(atomlist)):
@@ -149,9 +143,10 @@ def bob(atomlist,coords,atoms,Z):
 						bag[atomlist[i][j]+atomlist[i][k]].insert(0,Z[atoms.index(atomlist[i][j])]*Z[atoms.index(atomlist[i][k])]/np.linalg.norm(coords[i][j]-coords[i][k]))
 						del bag[atomlist[i][j]+atomlist[i][k]][-1]
 					except KeyError:
-						bag[atomlist[i][k]+atomlist[i][j]].insert(0,Z[atoms.index(atomlist[i][j])]*Z[atoms.index(atomlist[i][k])]/np.linalg.norm(coords[i][j]-coords[i][k]))
-						del bag[atomlist[i][k]+atomlist[i][j]][-1]		# Avoid KeyError raised by "wrong" order of atoms in a bond (e.g. 'CH' -> 'HC')
-		
+						bag[atomlist[i][k]+atomlist[i][j]].insert(0,Z[atoms.index(atomlist[i][j])]*Z[atoms.index(atomlist[i][k])]/np.linalg.norm(coords[i][j]-coords[i][k]))	
+						# Avoid KeyError raised by "wrong" order of atoms in a bond (e.g. 'CH' -> 'HC')
+						del bag[atomlist[i][k]+atomlist[i][j]][-1]	
+						
 		for pair in bag:
 			BoBvec = np.concatenate((BoBvec,np.array(sorted(bag[pair],reverse=True))))
 
@@ -161,15 +156,14 @@ def bob(atomlist,coords,atoms,Z):
 
 ## The following function takes the number of atoms in each molecule, the atom types and corresponding coordinates 
 ## and returns an array of corresponding Coulomb matrices
-
 def coulomb(natoms,atomlist,coords,atoms,Z):
 
-	dim = natoms.max()                      # Specify the dimensions of the Coulomb matrices based on the largest molecule
-	CM = np.zeros((len(natoms),dim,dim))     # Initialize an array of all Coulomb matrices
+	dim = natoms.max()                          # Specify the dimensions of the Coulomb matrices based on the largest molecule
+	CM = np.zeros((len(natoms),dim,dim))        # Initialize an array of all Coulomb matrices
 	CMvec = []
 
 	for i in range(len(natoms)):                # Loop over all molecules
-		for j in range(len(atomlist[i])):       # Loop over all atom pairs (j,k) in molecule i
+		for j in range(len(atomlist[i])):   # Loop over all atom pairs (j,k) in molecule i
 			for k in range(len(atomlist[i])):
 				if j == k:
 					CM[i][j][k] = 0.5*Z[atoms.index(atomlist[i][j])]**2.4
@@ -177,34 +171,28 @@ def coulomb(natoms,atomlist,coords,atoms,Z):
 					CM[i][j][k] = Z[atoms.index(atomlist[i][j])]*Z[atoms.index(atomlist[i][k])]/np.linalg.norm(coords[i][j]-coords[i][k])
 		
 		# Sort Coulomb matrix according to descending row norm
-
-		indexlist = np.argsort(-np.linalg.norm(CM[i],axis=1))    # Get the indices in the sorted order
+		indexlist = np.argsort(-np.linalg.norm(CM[i],axis=1))     # Get the indices in the sorted order
 		CM[i] = CM[i][indexlist]                                  # Rearrange the matrix
 		CMvec.append(CM[i][np.tril_indices(dim,k=0)])             # Convert the lower triangular matrix into a vector and append 
-																# to a list of Coulomb 'vectors' 
+		                                                          # to a list of Coulomb 'vectors' 
 
 	return CMvec
 
 ## Do the grid search (if optimal hyperparameters are not known), then training and prediction using KRR
 ## If doing grid search for optimal parameters use small training set size, like 1k (takes forever otherwise)
-
 def krr(x,y,nonHatoms):
 
 	inp4 = input('Do grid search for optimal hyperparameters? [True/False]\n')
 
 	if inp4 == True:
-
 		inp5 = raw_input('Provide kernel. [laplacian/rbf]\n').split()
-
 		x_train, x_test, y_train, y_test = train_test_split(x,y,test_size=0.9,stratify=nonHatoms)
 		kr = GridSearchCV(KernelRidge(kernel=inp5[0]),cv=5,param_grid={"alpha": np.logspace(-11,-1,11),"gamma": np.logspace(-9,-3,7)})
 		kr.fit(x_train,y_train)
 		print(kr.best_params_)
 
 	elif inp4 == False:
-
 		inp5 = raw_input('Provide kernel and hyperparameters. [kernel alpha gamma]\n').split()
-
 		x_train, x_test, y_train, y_test = train_test_split(x,y,test_size=0.1,stratify=nonHatoms)
 		kr = KernelRidge(kernel=inp5[0],alpha=float(inp5[1]),gamma=float(inp5[2]))
 		kr.fit(x_train,y_train)
@@ -230,9 +218,7 @@ def learning_curve(x,y,nonHatoms):
 	kr = KernelRidge(kernel=inp5[0],alpha=float(inp5[1]),gamma=float(inp5[2]))
 
 	for i in sample_sizes:
-
 		x_train, x_test, y_train, y_test = train_test_split(x,y,test_size=1-float(i)/len(y),stratify=nonHatoms)
-
 		kr.fit(x_train,y_train)
 		y_pred = kr.predict(x_test)
 		mae.append(MAE(y_test,y_pred))
@@ -244,7 +230,6 @@ def learning_curve(x,y,nonHatoms):
 	return y_pred,y_test,mae,rmse,sample_sizes
 
 ## The main routine and plotting
-
 def main():
 
 	# Just some plot settings
@@ -261,15 +246,12 @@ def main():
 	inp1 = raw_input('Which descriptor? [CM/BoB/MBTR]\n')
 
 	if inp1 == 'CM':
-
 		descriptor = coulomb(natoms,atomlist,coords,atoms,Z)
 	
 	elif inp1 == 'BoB':
-
 		descriptor = bob(atomlist,coords,atoms,Z)
 
 	elif inp1 == 'MBTR':
-
 		descriptor = mbtr(atomlist,coords,atoms,Z)
 
 	inp2 = raw_input('Which property? [Ea/gap/polar/dipmom]\n')
@@ -277,28 +259,24 @@ def main():
 	plt.figure()
 
 	if inp2 == 'Ea':
-
 		prop = Ea
 		plt.title(r'Atomization energy (eV)')
 		plt.xlabel(r'$\Delta_\mathrm{at}E^\mathrm{DFT}$ (eV)')
 		plt.ylabel(r'$\Delta_\mathrm{at}E^\mathrm{KRR}$ (eV)')
 
 	elif inp2 == 'gap':
-
 		prop = gap
 		plt.title(r'HOMO-LUMO gap (eV)')
 		plt.xlabel(r'$\Delta\varepsilon^\mathrm{DFT}$ (eV)')
 		plt.ylabel(r'$\Delta\varepsilon^\mathrm{KRR}$ (eV)')
-
+		
 	elif inp2 == 'polar':
-
 		prop = polar
 		plt.title(r'Isotropic polarizability (\r{A}$^3$)')
 		plt.xlabel(r'$\alpha^\mathrm{DFT}$ (\r{A}$^3$)')
 		plt.ylabel(r'$\alpha^\mathrm{KRR}$ (\r{A}$^3$)')
 
 	elif inp2 == 'dipmom':
-
 		prop = dipmom
 		plt.title(r'Dipole moment (e\r{A})')
 		plt.xlabel(r'$\mu^\mathrm{DFT}$ (e\r{A})')
@@ -307,23 +285,18 @@ def main():
 	inp3 = input('Plot learning curve? [True/False]\n')
 
 	if inp3 == True:
-
 		# Train
 		y_pred,y_test,mae,rmse,sample_sizes=learning_curve(descriptor,prop,nonHatoms)
-
 		np.savetxt('dipmom_BoB.dat',np.c_[y_test,y_pred])
 		np.savetxt('dipmom_BoB_lc.dat',np.c_[sample_sizes,mae])
-
 		# Plot learning curve
 		plt.semilogx(sample_sizes,mae,'o-',color='blue')
 		plt.xlabel(r'Training set size')
 		plt.ylabel(r'MAE')
 
 	elif inp3 == False:
-
 		# Train
 		y_pred,y_test=krr(descriptor,prop,nonHatoms)
-
 		#Plot results
 		plt.plot(y_test,y_pred,'.',color='blue')
 		plt.plot(np.linspace(y_test.min(),y_test.max(),1000),np.linspace(y_test.min(),y_test.max(),1000),'k--')
@@ -334,38 +307,38 @@ if __name__ == '__main__':
 	main()
 
 	## Optimal hyperparameters for CM + Laplacian kernel
-	# Ea: 				alpha 1e-11, gamma 1e-4
+	# Ea: 			alpha 1e-11, gamma 1e-4
 	# polarizability: 	alpha 1e-3, gamma 1e-4
 	# HOMO-LUMO gap: 	alpha 1e-2, gamma 1e-4
 	# Dipole moment: 	alpha 1e-1, gamma 1e-3
 
 	## Optimal hyperparameters for BoB + Laplacian kernel
-	# Ea: 				alpha 1e-11, gamma 1e-5
+	# Ea: 			alpha 1e-11, gamma 1e-5
 	# polarizability: 	alpha 1e-3, gamma 1e-4
 	# HOMO-LUMO gap: 	alpha 1e-3, gamma 1e-4
 	# Dipole moment: 	alpha 1e-1, gamma 1e-3
 
 	## Optimal hyperparameters for MBTR + Gaussian kernel
-	# Ea:				alpha 1e-7, gamma 1e-8
+	# Ea:			alpha 1e-7, gamma 1e-8
 	# polarizability:	alpha 1e-6, gamma 1e-7
 	# HOMO-LUMO gap:	alpha 1e-3, gamma 1e-6
 	# Dipole moment:	alpha 1e-2, gamma 1e-5
 
 
 	## Results for CM + Laplacian kernel
-	# Ea: 				MAE 0.38,	RMSE 0.55,	R2 0.9977
+	# Ea: 			MAE 0.38,	RMSE 0.55,	R2 0.9977
 	# polarizability: 	MAE 0.12,	RMSE 0.18,	R2 0.9828
 	# HOMO-LUMO gap: 	MAE 0.56,	RMSE 0.70,	R2 0.7203
 	# Dipole moment: 	MAE 0.14,	RMSE 0.19,	R2 0.5901
 
 	## Results for BoB + Laplacian kernel
-	# Ea: 				MAE 0.08,	RMSE 0.13,	R2 0.9998
+	# Ea: 			MAE 0.08,	RMSE 0.13,	R2 0.9998
 	# polarizability: 	MAE 0.06,	RMSE 0.09,	R2 0.9952
 	# HOMO-LUMO gap: 	MAE 0.23,	RMSE 0.31,	R2 0.9465
 	# Dipole moment: 	MAE 0.11,	RMSE 0.16,	R2 0.7327
 
 	## Results for MBTR + Gaussian kernel
-	# Ea: 				MAE 0.04,	RMSE 0.06,	R2 0.9999
+	# Ea: 			MAE 0.04,	RMSE 0.06,	R2 0.9999
 	# polarizability: 	MAE 0.02,	RMSE 0.04,	R2 0.9993
 	# HOMO-LUMO gap: 	MAE 0.17,	RMSE 0.23,	R2 0.9686
 	# Dipole moment: 	MAE 0.08,	RMSE 0.11,	R2 0.8508
