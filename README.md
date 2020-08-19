@@ -1,4 +1,4 @@
-# ML-project
+# ml-project
 
 Peformance analysis of four feature engineering methods (aka. representations/descriptors) for predicting simple properties of small molecules by means of kernel ridge regression (KRR). Data from [Ramakrishnan *et al.*, *Sci. Data* **2014**, 1, 140022.](https://www.nature.com/articles/sdata201422)
 
